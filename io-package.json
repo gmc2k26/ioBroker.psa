@@ -1,9 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.17",
+    "version": "0.0.18",
     "news": {
-      "0.0.17": {
+      "0.0.18": {
+        "en": "fix user and password objects in adapter configuration"
+      },
+     "0.0.17": {
         "en": "fix git-branch mess"
       },
       "0.0.16": {
@@ -97,10 +100,40 @@
   "encryptedNative": ["password", "user"],
   "protectedNative": ["password", "user"],
   "native": {
-    "user": "",
-    "password": "",
+    "user": {
+      "_id": "user",
+      "type": "text",
+      "common": {
+        "name": "Username (E-Mail)",
+        "type": "string",
+        "read": true,
+        "write": true
+      },
+      "native": {}
+    },
+    "password": {
+      "_id": "password",
+      "type": "password",
+      "common": {
+        "name": "Password",
+        "type": "string",
+        "read": true,
+        "write": true
+      },
+      "native": {}
+    },
     "code_verifier": "",
-    "auth_code": "",
+    "auth_code": {
+      "_id": "auth_code",
+      "type": "text",
+      "common": {
+        "name": "Authorization Code (optional)",
+        "type": "string",
+        "read": true,
+        "write": true
+      },
+      "native": {}
+    },
     "type": {
       "_id": "type",
       "type": "select",
