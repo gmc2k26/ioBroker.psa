@@ -1,8 +1,11 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.15",
+    "version": "0.0.16",
     "news": {
+    "0.0.16": {
+        "en": "Refactor main.js onReady method to validate configuration type and session authentication"
+      },
       "0.0.15": {
         "en": "Add automatic OAuth2 authentication with username/password",
         "de": "Automatische OAuth2-Authentifizierung mit Benutzername/Passwort hinzugefügt"
