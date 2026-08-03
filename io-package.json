@@ -1,9 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.16",
+    "version": "0.0.17",
     "news": {
-    "0.0.16": {
+      "0.0.17": {
+        "en": "fix git-branch mess"
+      },
+      "0.0.16": {
         "en": "Refactor main.js onReady method to validate configuration type and session authentication"
       },
       "0.0.15": {
