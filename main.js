@@ -80,98 +80,104 @@ class Psa extends utils.Adapter {
   /**
    * Is called when databases are connected and adapter received configuration.
    */
-  async onReady() {
-    // Initialize your adapter here
+async onReady() {
+  // Initialize your adapter here
 
-    this.setState("info.connection", false, true);
-    if (!this.config.type) {
-      this.log.warn("Please select type in settings");
+  this.setState("info.connection", false, true);
+
+  // --- FIX: Prüfe this.config.type BEVOR auf this.brands zuzugreifen ---
+  if (!this.config.type) {
+    this.log.warn("Please select type in settings");
+    return;
+  }
+
+  // --- FIX: Prüfe, ob der ausgewählte Typ gültig ist ---
+  if (!this.brands[this.config.type]) {
+    this.log.error(`Invalid type selected: ${this.config.type}. Available types: ${Object.keys(this.brands).join(", ")}`);
+    return;
+  }
+
+  if (this.config.interval < 0.5) {
+    this.log.info("Set interval to minimum 0.5");
+    this.config.interval = 0.5;
+  }
+
+  this.clientId = this.brands[this.config.type].clientId;
+  this.httpsAgent = new https.Agent({
+    pfx: fs.readFileSync(__dirname + "/certs/mwp.dat"),
+    passphrase: "y5Y2my5B",
+  });
+
+  // Initialize OAuth2 state
+  this.codeVerifier = null;
+  this.oauthServer = null;
+
+  await this.extendObject("auth", {
+    type: "channel",
+    common: {
+      name: "Authentification",
+    },
+    native: {},
+  });
+  await this.extendObject("auth.session", {
+    type: "state",
+    common: {
+      name: "Session",
+      type: "string",
+      role: "value",
+      read: true,
+      write: true,
+    },
+    native: {},
+  });
+
+  this.session = {};
+  const sessionState = await this.getStateAsync("auth.session");
+  if (sessionState) {
+    this.session = JSON.parse(sessionState.val);
+    if (this.session.refresh_token) {
+      this.log.info("Found old session. Try to refresh token");
+      await this.refreshToken();
+    }
+  }
+
+  // If no valid session, try to authenticate
+  if (!this.session.access_token) {
+    if (this.config.user && this.config.password) {
+      this.log.info("No valid session. Try to login with credentials");
+      const loginSuccess = await this.loginWithCredentials();
+      if (!loginSuccess && this.config.auth_code) {
+        this.log.info("Credentials login failed. Try with auth code");
+        await this.loginAuthCode(this.config.auth_code);
+      }
+    } else if (this.config.auth_code) {
+      this.log.info("Found auth code. Try to login");
+      await this.loginAuthCode(this.config.auth_code);
+    } else {
+      this.log.warn("Please enter username/password or authorization code in settings");
       return;
     }
-
-    if (this.config.interval < 0.5) {
-      this.log.info("Set interval to minimum 0.5");
-      this.config.interval = 0.5;
-    }
-    this.clientId = this.brands[this.config.type].clientId;
-    this.httpsAgent = new https.Agent({
-      pfx: fs.readFileSync(__dirname + "/certs/mwp.dat"),
-      passphrase: "y5Y2my5B",
-    });
-
-    await this.extendObject("auth", {
-      type: "channel",
-      common: {
-        name: "Authentification",
-      },
-      native: {},
-    });
-    await this.extendObject("auth.session", {
-      type: "state",
-      common: {
-        name: "Session",
-        type: "string",
-        role: "value",
-        read: true,
-        write: true,
-      },
-      native: {},
-    });
-    this.session = {};
-    const sessionState = await this.getStateAsync("auth.session");
-    if (sessionState) {
-      this.session = JSON.parse(sessionState.val);
-      if (this.session.refresh_token) {
-        this.log.info("Found old session. Try to refresh token");
-        await this.refreshToken();
-      }
-    } else {
-      if (this.config.auth_code) {
-        this.log.info("Found auth code. Try to login");
-        await this.loginAuthCode();
-      } else {
-        this.log.warn("Please enter authorization code in settings");
-      }
-    }
-    this.log.info("Get vehicles");
-    await this.getVehicles();
-    this.log.info("Get vehicle status");
-    await this.updateVehicle();
-
-    this.appUpdateInterval = setInterval(() => {
-      this.updateVehicle();
-    }, this.config.interval * 60 * 1000);
-
-    this.refreshTokenInterval = setInterval(() => {
-      this.refreshToken();
-    }, 60 * 60 * 1000 - 150);
-
-    // try {
-    //   this.receiveOldApi()
-    //     .then(() => {
-    //       this.log.info("OldAPI Login succesful, but only mileage is available");
-    //       this.oldApiUpdateInterval = setInterval(() => {
-    //         this.receiveOldApi().catch((_error) => {
-    //           this.log.warn("OldAPI Status failed");
-    //         });
-    //       }, this.config.interval * 60 * 1000);
-    //     })
-    //     .catch((_error) => {
-    //       this.log.warn("OldAPI Login failed, only relevant for non eletric cars");
-    //     });
-    // } catch (error) {
-    //   this.log.error(error);
-    // }
-    // await this.loginNewApi();
-    // if (this.newApi && this.newApi.mym_access_token) {
-    //   this.getnewApiData().then(() => {
-    //     this.log.info("Receive Data from new API you can find it under psa.0.newApi");
-    //   });
-    //   this.newApiUpdateInterval = setInterval(() => {
-    //     this.getnewApiData();
-    //   }, this.config.interval * 60 * 1000);
-    // }
   }
+
+  // Check if we have a valid session after all attempts
+  if (!this.session.access_token) {
+    this.log.error("Could not authenticate. Please check your credentials or auth code.");
+    return;
+  }
+
+  this.log.info("Get vehicles");
+  await this.getVehicles();
+  this.log.info("Get vehicle status");
+  await this.updateVehicle();
+
+  this.appUpdateInterval = setInterval(() => {
+    this.updateVehicle();
+  }, this.config.interval * 60 * 1000);
+
+  this.refreshTokenInterval = setInterval(() => {
+    this.refreshToken();
+  }, 60 * 60 * 1000 - 150);
+}
 
   async loginAuthCode() {
     //check if auth code is a url and extract code or if it is a code
