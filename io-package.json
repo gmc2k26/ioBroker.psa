@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.14",
+    "version": "0.0.15",
     "news": {
+      "0.0.15": {
+        "en": "Add automatic OAuth2 authentication with username/password",
+        "de": "Automatische OAuth2-Authentifizierung mit Benutzername/Passwort hinzugefügt"
+      },
       "0.0.14": {
         "en": "fix authentication method"
       },
@@ -53,7 +57,7 @@
       "pl": "Adapter PSA do Peugeot, Citroen, DS, Opel",
       "zh-cn": "标致、雪铁龙、DS、欧宝、沃克斯豪尔的 PSA 适配器"
     },
-    "authors": ["TA2k <tombox2020@gmail.com>"],
+    "authors": ["TA2k <tombox2020@gmail.com>", "gmc2k26"],
     "keywords": ["PSA", "Peugeot", "Citroen", "DS", "Opel", "Vauxhall"],
     "license": "MIT",
     "platform": "Javascript/Node.js",
@@ -98,7 +102,8 @@
         "name": "Vehicle brand",
         "type": "string",
         "read": true,
-        "write": true
+        "write": true,
+        "def": "peugeot"
       },
       "native": {
         "options": [
