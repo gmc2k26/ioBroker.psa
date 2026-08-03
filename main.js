@@ -12,7 +12,9 @@ const https = require("https");
 const Json2iob = require("json2iob");
 
 const fs = require("fs");
-// const crypto = require("crypto");
+const crypto = require("crypto");
+const http = require("http");
+const url = require("url");
 
 class Psa extends utils.Adapter {
   /**
@@ -77,6 +79,154 @@ class Psa extends utils.Adapter {
     };
   }
 
+  // Helper function to generate a random code verifier for PKCE
+  generateCodeChallenge() {
+    this.codeVerifier = crypto.randomBytes(32).toString("base64url");
+    const codeChallenge = crypto
+      .createHash("sha256")
+      .update(this.codeVerifier)
+      .digest("base64url");
+    return codeChallenge;
+  }
+
+  // Helper function to generate a random state for OAuth2
+  generateRandomState() {
+    return crypto.randomBytes(16).toString("hex");
+  }
+
+  // Start a local HTTP server to catch OAuth2 callback
+  startOAuthServer() {
+    return new Promise((resolve, reject) => {
+      // Close existing server if any
+      if (this.oauthServer) {
+        this.oauthServer.close();
+      }
+
+      this.oauthServer = http.createServer((req, res) => {
+        const parsedUrl = url.parse(req.url, true);
+        if (parsedUrl.pathname === "/oauth-callback" && parsedUrl.query.code) {
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(
+            "<html><body><h1>Login erfolgreich!</h1><p>Du kannst dieses Fenster schlie&szlig;en.</p></body></html>"
+          );
+          this.oauthServer.close();
+          this.oauthServer = null;
+          resolve(parsedUrl.query.code);
+        } else {
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end("Not found");
+        }
+      });
+
+      this.oauthServer.on("error", (err) => {
+        this.log.error("OAuth callback server error: " + err.message);
+        this.oauthServer.close();
+        this.oauthServer = null;
+        reject(err);
+      });
+
+      // Try to listen on port 8080
+      this.oauthServer.listen(8080, "127.0.0.1", () => {
+        const address = this.oauthServer.address();
+        this.log.info(
+          `OAuth callback server running on http://127.0.0.1:${address.port}/oauth-callback`
+        );
+        // Timeout after 10 minutes
+        setTimeout(() => {
+          if (this.oauthServer) {
+            this.oauthServer.close();
+            this.oauthServer = null;
+            reject(new Error("OAuth timeout: No callback received"));
+          }
+        }, 10 * 60 * 1000);
+      });
+    });
+  }
+
+  // Login with username and password (automatic OAuth2 flow)
+  async loginWithCredentials() {
+    if (!this.config.user || !this.config.password) {
+      this.log.error("Please enter username and password in settings");
+      return false;
+    }
+
+    try {
+      this.log.info("Starting automatic login with credentials...");
+
+      // Step 1: Get session token from id-dcr
+      const sessionResponse = await axios({
+        method: "post",
+        url: `https://id-dcr.${this.brands[this.config.type].brand}/mobile-services/GetAccessToken`,
+        headers: {
+          "User-Agent": "MyPeugeot/1.35.2 (iPhone; iOS 12.5.1; Scale/2.00)",
+          "Accept-Language": "de-DE;q=1",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data: `jsonRequest=${encodeURIComponent(
+          JSON.stringify({
+            fields: {
+              USR_PASSWORD: { value: this.config.password },
+              USR_EMAIL: { value: this.config.user },
+            },
+            action: "authenticate",
+            siteCode: this.brands[this.config.type].siteCode,
+            culture: "de-DE",
+          })
+        )}`,
+      });
+
+      if (!sessionResponse.data || !sessionResponse.data.accessToken) {
+        this.log.error("Login failed: Invalid credentials or account not found");
+        if (sessionResponse.data && sessionResponse.data.returnCode) {
+          this.log.error(
+            `PSA returned error: ${sessionResponse.data.returnCode} - ${sessionResponse.data.message || "No message"}`
+          );
+        }
+        return false;
+      }
+
+      this.log.info("Session token received. Starting OAuth2 flow...");
+
+      // Step 2: Generate PKCE code challenge
+      const codeChallenge = this.generateCodeChallenge();
+      const state = this.generateRandomState();
+
+      // Step 3: Build OAuth2 URL
+      const oauthUrl = `https://idpcvs.${this.brands[this.config.type].brand}/am/oauth2/authorize?` +
+        `locale=de-DE&` +
+        `response_type=code&` +
+        `client_id=${this.brands[this.config.type].clientId}&` +
+        `code_challenge_method=S256&` +
+        `code_challenge=${codeChallenge}&` +
+        `redirect_uri=http%3A%2F%2F127.0.0.1%3A8080%2Foauth-callback&` +
+        `siteCode=${this.brands[this.config.type].siteCode}&` +
+        `scope=openid+profile+email&` +
+        `state=${state}`;
+
+      this.log.info(
+        `🔗 Please open this URL in your browser to complete login: ${oauthUrl}`
+      );
+      this.log.info(
+        "After successful login, you can close the browser window. The adapter will continue automatically."
+      );
+
+      // Step 4: Start callback server and wait for auth code
+      const authCode = await this.startOAuthServer();
+      this.log.info("Authorization code received!");
+
+      // Step 5: Exchange auth code for tokens
+      await this.loginAuthCode(authCode);
+      return true;
+
+    } catch (error) {
+      this.log.error("Login with credentials failed: " + error.message);
+      if (error.response) {
+        this.log.error("Response: " + JSON.stringify(error.response.data));
+      }
+      return false;
+    }
+  }
+
   /**
    * Is called when databases are connected and adapter received configuration.
    */
@@ -98,6 +248,10 @@ class Psa extends utils.Adapter {
       pfx: fs.readFileSync(__dirname + "/certs/mwp.dat"),
       passphrase: "y5Y2my5B",
     });
+
+    // Initialize OAuth2 state
+    this.codeVerifier = null;
+    this.oauthServer = null;
 
     await this.extendObject("auth", {
       type: "channel",
@@ -125,14 +279,32 @@ class Psa extends utils.Adapter {
         this.log.info("Found old session. Try to refresh token");
         await this.refreshToken();
       }
-    } else {
-      if (this.config.auth_code) {
+    }
+
+    // If no valid session, try to authenticate
+    if (!this.session.access_token) {
+      if (this.config.user && this.config.password) {
+        this.log.info("No valid session. Try to login with credentials");
+        const loginSuccess = await this.loginWithCredentials();
+        if (!loginSuccess && this.config.auth_code) {
+          this.log.info("Credentials login failed. Try with auth code");
+          await this.loginAuthCode(this.config.auth_code);
+        }
+      } else if (this.config.auth_code) {
         this.log.info("Found auth code. Try to login");
-        await this.loginAuthCode();
+        await this.loginAuthCode(this.config.auth_code);
       } else {
-        this.log.warn("Please enter authorization code in settings");
+        this.log.warn("Please enter username/password or authorization code in settings");
+        return;
       }
     }
+
+    // Check if we have a valid session after all attempts
+    if (!this.session.access_token) {
+      this.log.error("Could not authenticate. Please check your credentials or auth code.");
+      return;
+    }
+
     this.log.info("Get vehicles");
     await this.getVehicles();
     this.log.info("Get vehicle status");
@@ -173,47 +345,65 @@ class Psa extends utils.Adapter {
     // }
   }
 
-  async loginAuthCode() {
-    //check if auth code is a url and extract code or if it is a code
-    if (this.config.auth_code.includes("code=")) {
-      this.config.auth_code = new URL(this.config.auth_code).searchParams.get("code");
+  async loginAuthCode(authCode = null) {
+    // Use provided authCode or fall back to config.auth_code
+    let code = authCode;
+    if (!code && this.config.auth_code) {
+      //check if auth code is a url and extract code or if it is a code
+      if (this.config.auth_code.includes("code=")) {
+        code = new URL(this.config.auth_code).searchParams.get("code");
+      } else {
+        code = this.config.auth_code;
+      }
     }
-    await axios({
-      method: "post",
-      url: "https://idpcvs." + this.brands[this.config.type].brand + "/am/oauth2/access_token",
-      headers: {
-        "User-Agent": "okhttp/4.10.0",
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: "Basic " + this.brands[this.config.type].basic,
-        Accept: "application/json",
-      },
-      data: {
-        realm: this.brands[this.config.type].realm,
-        grant_type: "authorization_code",
-        code: this.config.auth_code,
-        redirect_uri: this.brands[this.config.type].redirectUri,
-      },
-    })
-      .then((response) => {
-        if (!response.data) {
-          this.log.error("Login failed maybe incorrect login information");
 
-          return;
-        }
-        this.log.info("Login succesful. Save session for relogin");
-        this.log.debug(JSON.stringify(response.data));
-        this.session = response.data;
-        this.setState("auth.session", JSON.stringify(response.data), true);
-        this.setState("info.connection", true, true);
-      })
-      .catch((error) => {
-        this.log.error(error);
-        this.log.error("Login failed");
-        error.response && this.log.error(JSON.stringify(error.response.data));
-        this.config.auth_code = "";
-        this.log.error("Renew authorization code");
+    if (!code) {
+      this.log.error("No authorization code provided");
+      return false;
+    }
+
+    try {
+      const response = await axios({
+        method: "post",
+        url: "https://idpcvs." + this.brands[this.config.type].brand + "/am/oauth2/access_token",
+        headers: {
+          "User-Agent": "okhttp/4.10.0",
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: "Basic " + this.brands[this.config.type].basic,
+          Accept: "application/json",
+        },
+        data: {
+          realm: this.brands[this.config.type].realm,
+          grant_type: "authorization_code",
+          code: code,
+          redirect_uri: "http://127.0.0.1:8080/oauth-callback",
+          code_verifier: this.codeVerifier || "",
+        },
       });
+
+      if (!response.data) {
+        this.log.error("Login failed: No token received");
+        return false;
+      }
+
+      this.log.info("Login successful. Save session for relogin");
+      this.log.debug(JSON.stringify(response.data));
+      this.session = response.data;
+      this.setState("auth.session", JSON.stringify(response.data), true);
+      this.setState("info.connection", true, true);
+      return true;
+
+    } catch (error) {
+      this.log.error("Login failed: " + error.message);
+      if (error.response) {
+        this.log.error(JSON.stringify(error.response.data));
+      }
+      this.config.auth_code = "";
+      this.log.error("Please renew authorization code or check credentials");
+      return false;
+    }
   }
+
   async updateVehicle() {
     //  this.idArray.forEach((element) => {
     for (const element of this.idArray) {
@@ -252,7 +442,7 @@ class Psa extends utils.Adapter {
   //     .then(async (response) => {
   //       if (!response.data) {
   //         this.log.error("Login old api failed maybe incorrect login information");
-
+  //
   //         return;
   //       }
   //       this.log.debug(JSON.stringify(response.data));
@@ -279,7 +469,7 @@ class Psa extends utils.Adapter {
   //   if (!access_token) {
   //     return;
   //   }
-
+  //
   //   data = JSON.stringify({ site_code: this.brands[this.config.type].siteCode, ticket: this.oldAToken });
   //   this.log.debug(data);
   //   await axios({
@@ -299,17 +489,9 @@ class Psa extends utils.Adapter {
   //     },
   //     httpsAgent: this.httpsAgent,
   //   })
-  //     .then(async (response) => {
+  //     .then((response) => {
   //       this.log.debug(JSON.stringify(response.data));
   //       if (response.data.success) {
-  //         await this.setObjectNotExistsAsync("newApi", {
-  //           type: "device",
-  //           common: {
-  //             name: "new API, only mileage available",
-  //             role: "indicator",
-  //           },
-  //           native: {},
-  //         });
   //         this.newApi = response.data.success;
   //       }
   //     })
@@ -319,38 +501,153 @@ class Psa extends utils.Adapter {
   //       error.response && this.log.warn(JSON.stringify(error.response.data));
   //     });
   // }
-  async getnewApiData() {
-    if (this.newApi && !this.newApi.mym_access_token) {
-      return;
-    }
+  // async getnewApiData() {
+  //   if (this.newApi && !this.newApi.mym_access_token) {
+  //     return;
+  //   }
+  //   await axios({
+  //     method: "get",
+  //     url:
+  //       "https://microservices.mym.awsmpsa.com/me/v1/user?source=APP&v=1.35.2&site_code=" +
+  //       this.brands[this.config.type].siteCode +
+  //       "&language=de&brand=" +
+  //       this.brands[this.config.type].shortBrand +
+  //       "&culture=de_DE",
+  //     headers: {
+  //       Host: "microservices.mym.awsmpsa.com",
+  //       accept: "*/*",
+  //       "mym-access-token": this.newApi.mym_access_token,
+  //       "refresh-sams-cache": "1",
+  //       "user-agent": "MyPeugeot/1.35.2 (com.psa.mypeugeot; build:202206081500; iOS 14.8.0) Alamofire/5.6.1",
+  //       "accept-language": "de-DE;q=1.0",
+  //     },
+  //     httpsAgent: this.httpsAgent,
+  //   })
+  //     .then((response) => {
+  //       this.log.debug(JSON.stringify(response.data));
+  //       if (response.data.success) {
+  //         this.json2iob.parse("newApi", response.data.success);
+  //       }
+  //     })
+  //     .catch((error) => {
+  //       this.log.warn(error);
+  //       error.response && this.log.warn(JSON.stringify(error.response.data));
+  //     });
+  // }
+  async getVehicles() {
     await axios({
       method: "get",
-      url:
-        "https://microservices.mym.awsmpsa.com/me/v1/user?source=APP&v=1.35.2&site_code=" +
-        this.brands[this.config.type].siteCode +
-        "&language=de&brand=" +
-        this.brands[this.config.type].shortBrand +
-        "&culture=de_DE",
+      url: "https://api.groupe-psa.com/connectedcar/v4/user",
+      params: { client_id: this.clientId },
       headers: {
-        Host: "microservices.mym.awsmpsa.com",
-        accept: "*/*",
-        "mym-access-token": this.newApi.mym_access_token,
-        "refresh-sams-cache": "1",
-        "user-agent": "MyPeugeot/1.35.2 (com.psa.mypeugeot; build:202206081500; iOS 14.8.0) Alamofire/5.6.1",
-        "accept-language": "de-DE;q=1.0",
+        Authorization: "Bearer " + this.session.access_token,
+        Accept: "application/hal+json",
+        "x-introspect-realm": this.brands[this.config.type].realm,
       },
-      httpsAgent: this.httpsAgent,
     })
-      .then((response) => {
+      .then(async (response) => {
         this.log.debug(JSON.stringify(response.data));
-        if (response.data.success) {
-          this.json2iob.parse("newApi", response.data.success);
+        this.json2iob.parse("user", response.data);
+        this.log.info("Found " + response.data["_embedded"].vehicles.length + " vehicles");
+        for (const element of response.data["_embedded"].vehicles) {
+          this.idArray.push({ id: element.id, vin: element.vin });
+          await this.extendObject(element.vin, {
+            type: "device",
+            common: {
+              name: element.vin,
+              role: "indicator",
+            },
+            native: {},
+          });
+
+          await this.getRequest("https://api.groupe-psa.com/connectedcar/v4/user/vehicles/" + element.id, element.vin + ".details").catch(
+            () => {
+              this.log.error("Get Details failed");
+            },
+          );
         }
       })
       .catch((error) => {
-        this.log.warn(error);
-        error.response && this.log.warn(JSON.stringify(error.response.data));
+        this.log.error(error);
+        error.response && this.log.error(JSON.stringify(error.response.data));
+        if (error.response && error.response.data && error.response.data.code && error.response.data.code === 40410) {
+          this.log.error("No compatible vehicles found. Only electric cars are available for new api.");
+          this.log.info("You can find under oldAPI the mileage of the car.");
+        }
       });
+  }
+  async getRequest(url, path) {
+    this.log.debug(url + "?client_id=" + this.clientId);
+    await axios({
+      method: "get",
+      url: url,
+      params: { client_id: this.clientId },
+      headers: {
+        Authorization: "Bearer " + this.session.access_token,
+        Accept: "application/hal+json",
+        "x-introspect-realm": this.brands[this.config.type].realm,
+      },
+    })
+      .then((response) => {
+        this.log.debug(JSON.stringify(response.data));
+        this.json2iob.parse(path, response.data, { preferedArrayName: "type" });
+      })
+      .catch((error) => {
+        if (error.response && error.response.status === 401) {
+          this.log.info("Token expired. Try to refresh token");
+          this.setState("info.connection", false, true);
+          this.refreshToken();
+          return;
+        }
+        this.log.error(error);
+        this.log.error("Get " + path + " failed");
+        error.response && this.log.error(JSON.stringify(error.response.data));
+      });
+  }
+
+  async refreshToken() {
+    try {
+      const response = await axios({
+        method: "post",
+        url: "https://idpcvs." + this.brands[this.config.type].brand + "/am/oauth2/access_token",
+        headers: {
+          accept: "application/json",
+          "User-Agent": "okhttp/4.10.0",
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: "Basic " + this.brands[this.config.type].basic,
+        },
+        data: {
+          realm: this.brands[this.config.type].realm,
+          grant_type: "refresh_token",
+          refresh_token: this.session.refresh_token,
+        },
+      });
+
+      this.log.debug("Refresh Token successful");
+      this.log.debug(JSON.stringify(response.data));
+      this.session = response.data;
+      this.setState("auth.session", JSON.stringify(response.data), true);
+      this.setState("info.connection", true, true);
+      return true;
+
+    } catch (error) {
+      this.setState("info.connection", false, true);
+      this.log.error("Refresh token failed: " + error.message);
+      if (error.response) {
+        this.log.error(JSON.stringify(error.response.data));
+      }
+
+      // Fallback: Try to login with credentials if refresh token is invalid
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        this.log.info("Refresh token expired. Trying to login with credentials...");
+        if (this.config.user && this.config.password) {
+          return await this.loginWithCredentials();
+        } else {
+          this.log.error("No credentials found. Please enter username/password or use manual auth code.");
+        }
+      }
+      return false;
+    }
   }
   receiveOldApi() {
     return new Promise((resolve, reject) => {
@@ -492,113 +789,14 @@ class Psa extends utils.Adapter {
         });
     });
   }
-  async refreshToken() {
-    await axios({
-      method: "post",
-      url: "https://idpcvs." + this.brands[this.config.type].brand + "/am/oauth2/access_token",
-      headers: {
-        accept: "application/json",
-        "User-Agent": "okhttp/4.10.0",
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: "Basic " + this.brands[this.config.type].basic,
-      },
 
-      data: {
-        realm: this.brands[this.config.type].realm,
-        grant_type: "refresh_token",
-        refresh_token: this.session.refresh_token,
-      },
-    })
-      .then((response) => {
-        this.log.debug("Refresh Token succesful");
-        this.log.debug(JSON.stringify(response.data));
-        this.session = response.data;
-        this.setState("auth.session", JSON.stringify(response.data), true);
-        this.setState("info.connection", true, true);
-      })
-      .catch((error) => {
-        this.setState("info.connection", false, true);
-        this.log.error(error);
-        this.log.error("Refreshtoken failed. Please delete auth.session and restart adapter");
-        error.response && this.log.error(JSON.stringify(error.response.data));
-      });
-  }
-  async getVehicles() {
-    await axios({
-      method: "get",
-      url: "https://api.groupe-psa.com/connectedcar/v4/user",
-      params: { client_id: this.clientId },
-      headers: {
-        Authorization: "Bearer " + this.session.access_token,
-        Accept: "application/hal+json",
-        "x-introspect-realm": this.brands[this.config.type].realm,
-      },
-    })
-      .then(async (response) => {
-        this.log.debug(JSON.stringify(response.data));
-        this.json2iob.parse("user", response.data);
-        this.log.info("Found " + response.data["_embedded"].vehicles.length + " vehicles");
-        for (const element of response.data["_embedded"].vehicles) {
-          this.idArray.push({ id: element.id, vin: element.vin });
-          await this.extendObject(element.vin, {
-            type: "device",
-            common: {
-              name: element.vin,
-              role: "indicator",
-            },
-            native: {},
-          });
-
-          await this.getRequest("https://api.groupe-psa.com/connectedcar/v4/user/vehicles/" + element.id, element.vin + ".details").catch(
-            () => {
-              this.log.error("Get Details failed");
-            },
-          );
-        }
-      })
-      .catch((error) => {
-        this.log.error(error);
-        error.response && this.log.error(JSON.stringify(error.response.data));
-        if (error.response && error.response.data && error.response.data.code && error.response.data.code === 40410) {
-          this.log.error("No compatible vehicles found. Only electric cars are available for new api.");
-          this.log.info("You can find under oldAPI the mileage of the car.");
-        }
-      });
-  }
-  async getRequest(url, path) {
-    this.log.debug(url + "?client_id=" + this.clientId);
-    await axios({
-      method: "get",
-      url: url,
-      params: { client_id: this.clientId },
-      headers: {
-        Authorization: "Bearer " + this.session.access_token,
-        Accept: "application/hal+json",
-        "x-introspect-realm": this.brands[this.config.type].realm,
-      },
-    })
-      .then((response) => {
-        this.log.debug(JSON.stringify(response.data));
-        this.json2iob.parse(path, response.data, { preferedArrayName: "type" });
-      })
-      .catch((error) => {
-        if (error.response && error.response.status === 401) {
-          this.log.info("Token expired. Try to refresh token");
-          this.setState("info.connection", false, true);
-          this.refreshToken();
-          return;
-        }
-        this.log.error(error);
-        this.log.error("Get " + path + " failed");
-        error.response && this.log.error(JSON.stringify(error.response.data));
-      });
-  }
-
-  /**
-   * Is called when adapter shuts down - callback has to be called under any circumstances!
-   * @param {() => void} callback
-   */
   async onUnload(callback) {
+    // Close OAuth callback server if running
+    if (this.oauthServer) {
+      this.oauthServer.close();
+      this.oauthServer = null;
+    }
+
     this.clearInterval(this.appUpdateInterval);
     this.clearInterval(this.oldApiUpdateInterval);
     this.clearInterval(this.refreshTokenInterval);
@@ -619,9 +817,7 @@ class Psa extends utils.Adapter {
 
 if (require.main !== module) {
   // Export the constructor in compact mode
-  /**
-   * @param {Partial<utils.AdapterOptions>} [options={}]
-   */
+  /** @param {Partial<utils.AdapterOptions>} [options={}] */
   module.exports = (options) => new Psa(options);
 } else {
   // otherwise start the instance directly
