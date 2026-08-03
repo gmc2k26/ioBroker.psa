@@ -25,7 +25,7 @@
         "it": "Versione iniziale",
         "es": "Versión inicial",
         "pl": "Pierwsze wydanie",
-        "zh-cn": "首次出版"
+        "zh-cn": "首次发行"
       }
     },
     "title": "PSA",
@@ -84,8 +84,8 @@
       }
     ]
   },
-  "encryptedNative": ["password"],
-  "protectedNative": ["password"],
+  "encryptedNative": ["password", "user"],
+  "protectedNative": ["password", "user"],
   "native": {
     "user": "",
     "password": "",
