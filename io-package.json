@@ -25,7 +25,7 @@
         "it": "Versione iniziale",
         "es": "Versión inicial",
         "pl": "Pierwsze wydanie",
-        "zh-cn": "首次出版"
+        "zh-cn": "首次发行"
       }
     },
     "title": "PSA",
@@ -84,14 +84,31 @@
       }
     ]
   },
-  "encryptedNative": ["password"],
-  "protectedNative": ["password"],
+  "encryptedNative": ["password", "user"],
+  "protectedNative": ["password", "user"],
   "native": {
     "user": "",
     "password": "",
     "code_verifier": "",
     "auth_code": "",
-    "type": "",
+    "type": {
+      "_id": "type",
+      "type": "select",
+      "common": {
+        "name": "Vehicle brand",
+        "type": "string",
+        "read": true,
+        "write": true
+      },
+      "native": {
+        "options": [
+          { "value": "peugeot", "label": "Peugeot" },
+          { "value": "citroen", "label": "Citroën" },
+          { "value": "driveds", "label": "DS Automobiles" },
+          { "value": "opel", "label": "Opel" }
+        ]
+      }
+    },
     "interval": 5
   },
   "objects": [],
