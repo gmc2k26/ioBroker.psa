@@ -1,2 +1,0 @@
-Dies ist eine Testdatei für einen Push-Vorgang.
-Erstellt von Vibe Code zur Überprüfung der GitHub-Integration.
