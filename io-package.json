@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.18",
+    "version": "0.0.19",
     "news": {
+      "0.0.19": {
+        "en": "fix type configuration validation to ensure it is a string and not an object",
+        "de": "Fix für Typ-Konfiguration: Sicherstellen, dass der Fahrzeugtyp als String (nicht als Objekt) gespeichert ist"
+      },
       "0.0.18": {
         "en": "fix user and password objects in adapter configuration"
       },

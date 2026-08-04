@@ -235,13 +235,13 @@ async onReady() {
 
   this.setState("info.connection", false, true);
 
-  // --- FIX: Prüfe this.config.type BEVOR auf this.brands zuzugreifen ---
-  if (!this.config.type) {
-    this.log.warn("Please select type in settings");
+  // --- FIX: Prüfe, ob this.config.type ein gültiger String ist ---
+  if (!this.config.type || typeof this.config.type !== 'string') {
+    this.log.error(`Invalid type selected: ${this.config.type}. Type must be a string. Available types: ${Object.keys(this.brands).join(", ")}`);
     return;
   }
 
-  // --- FIX: Prüfe, ob der ausgewählte Typ gültig ist ---
+  // --- FIX: Prüfe, ob der ausgewählte Typ in this.brands existiert ---
   if (!this.brands[this.config.type]) {
     this.log.error(`Invalid type selected: ${this.config.type}. Available types: ${Object.keys(this.brands).join(", ")}`);
     return;
