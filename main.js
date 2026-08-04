@@ -49,7 +49,7 @@ class Psa extends utils.Adapter {
         siteCode: "AP_DE_ESP",
         shortBrand: "AP",
         url: "mw-ap-rp.mym.awsmpsa.com",
-        redirectUri: "http://127.0.0.1:8080/oauth-callback",
+        redirectUri: "mymap://oauth2redirect/de",
       },
       citroen: {
         brand: "citroen.com",
@@ -59,7 +59,7 @@ class Psa extends utils.Adapter {
         siteCode: "AC_DE_ESP",
         shortBrand: "AC",
         url: "mw-ac-rp.mym.awsmpsa.com",
-        redirectUri: "http://127.0.0.1:8080/oauth-callback",
+        redirectUri: "mymacsdk://oauth2redirect/de",
       },
       driveds: {
         brand: "driveds.com",
@@ -69,7 +69,7 @@ class Psa extends utils.Adapter {
         siteCode: "DS_DE_ESP",
         shortBrand: "DS",
         url: "mw-ds-rp.mym.awsmpsa.com",
-        redirectUri: "http://127.0.0.1:8080/oauth-callback",
+        redirectUri: "mymdssdk://oauth2redirect/de",
       },
       opel: {
         brand: "opel.com",
@@ -79,7 +79,7 @@ class Psa extends utils.Adapter {
         siteCode: "OP_DE_ESP",
         shortBrand: "OP",
         url: "mw-op-rp.mym.awsmpsa.com",
-        redirectUri: "http://127.0.0.1:8080/oauth-callback",
+        redirectUri: "mymop://oauth2redirect/de",
       },
     };
   }
@@ -214,31 +214,30 @@ class Psa extends utils.Adapter {
       const codeChallenge = this.generateCodeChallenge();
       const state = this.generateRandomState();
 
-      // Step 3: Build OAuth2 URL with dynamic redirect_uri
-      const serverIp = this.getServerIp();
-      const redirectUri = `http://${serverIp}:8080/oauth-callback`;
+      // Step 3: Build OAuth2 URL with the correct redirect_uri for PSA
       const oauthUrl = `https://idpcvs.${this.brands[this.config.type].brand}/am/oauth2/authorize?` +
         `locale=de-DE&` +
         `response_type=code&` +
         `client_id=${this.brands[this.config.type].clientId}&` +
         `code_challenge_method=S256&` +
         `code_challenge=${codeChallenge}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `redirect_uri=${encodeURIComponent(this.brands[this.config.type].redirectUri)}&` +
         `siteCode=${this.brands[this.config.type].siteCode}&` +
         `scope=openid+profile+email&` +
         `state=${state}`;
-
       this.log.info(
-        `🔗 Please open this URL in your browser to complete login: ${oauthUrl}`
+        `Please open this URL in your browser to complete login: ${oauthUrl}`
       );
       this.log.info(
-        "After successful login, you can close the browser window. The adapter will continue automatically."
+        "After login, PSA will redirect to a custom URI (e.g., mymap://oauth2redirect/de?code=...). " +
+        "Copy the 'code' parameter from the browser URL and paste it into the adapter settings."
       );
-
-      // Step 4: Start callback server and wait for auth code
-      const authCode = await this.startOAuthServer();
-      this.log.info("Authorization code received!");
-
+      this.log.warn(
+        "The adapter cannot automatically capture the code due to PSA restrictions. Manual entry is required."
+      );
+      // Since PSA does not allow HTTP callbacks, we cannot automatically capture the code.
+      // The user must manually enter the auth code in the settings.
+      return false;
       // Step 5: Exchange auth code for tokens
       await this.loginAuthCode(authCode);
       return true;

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.25",
+    "version": "0.0.26",
     "news": {
+      "0.0.26": {
+        "en": "revert redirect_uri to PSA custom schemes (mymap://, mymacsdk://, etc.) due to PSA restrictions, manual auth code entry required",
+        "de": "Rückgängig: redirect_uri auf PSA-Custom-Schemes (mymap://, mymacsdk://, etc.) wegen PSA-Beschränkungen, manuelle Eingabe des Auth-Codes erforderlich"
+      },
       "0.0.25": {
         "en": "fix OAuth callback: server now listens on 0.0.0.0 and uses ioBroker server IP for redirect_uri",
         "de": "Fix für OAuth-Callback: Server hört jetzt auf 0.0.0.0 und verwendet die ioBroker-Server-IP für redirect_uri"
