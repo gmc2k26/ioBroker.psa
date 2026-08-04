@@ -146,7 +146,7 @@
         "type": "string",
         "read": true,
         "write": true,
-        "def": "peugeot"
+        "default": "peugeot"
       },
       "native": {
         "options": [
