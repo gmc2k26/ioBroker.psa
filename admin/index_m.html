@@ -22,25 +22,25 @@
           brand: 'peugeot.com',
           clientId: '1eebc2d5-5df3-459b-a624-20abfcf82530',
           siteCode: 'AP_DE_ESP',
-          redirectUri: 'mymap://oauth2redirect/de',
+          redirectUri: 'http://127.0.0.1:8080/oauth-callback',
         },
         citroen: {
           brand: 'citroen.com',
           clientId: '5364defc-80e6-447b-bec6-4af8d1542cae',
           siteCode: 'AC_DE_ESP',
-          redirectUri: 'mymacsdk://oauth2redirect/de',
+          redirectUri: 'http://127.0.0.1:8080/oauth-callback',
         },
         driveds: {
           brand: 'driveds.com',
           clientId: 'cbf74ee7-a303-4c3d-aba3-29f5994e2dfa',
           siteCode: 'DS_DE_ESP',
-          redirectUri: 'mymdssdk://oauth2redirect/de',
+          redirectUri: 'http://127.0.0.1:8080/oauth-callback',
         },
         opel: {
           brand: 'opel.com',
           clientId: '07364655-93cb-4194-8158-6b035ac2c24c',
           siteCode: 'OP_DE_ESP',
-          redirectUri: 'mymop://oauth2redirect/de',
+          redirectUri: 'http://127.0.0.1:8080/oauth-callback',
         },
       };
 
@@ -67,6 +67,13 @@
               $('#type').on('change', function () {
                 updateLoginLink($(this).val());
               });
+            }
+
+            // Fix: Ensure user and password are strings, not objects
+            if (id === 'user' || id === 'password') {
+              if (!settings[id] || typeof settings[id] !== 'string') {
+                settings[id] = '';
+              }
             }
 
             if (id !== 'code_verifier') {

@@ -49,7 +49,7 @@ class Psa extends utils.Adapter {
         siteCode: "AP_DE_ESP",
         shortBrand: "AP",
         url: "mw-ap-rp.mym.awsmpsa.com",
-        redirectUri: "mymap://oauth2redirect/de",
+        redirectUri: "http://127.0.0.1:8080/oauth-callback",
       },
       citroen: {
         brand: "citroen.com",
@@ -59,7 +59,7 @@ class Psa extends utils.Adapter {
         siteCode: "AC_DE_ESP",
         shortBrand: "AC",
         url: "mw-ac-rp.mym.awsmpsa.com",
-        redirectUri: "mymacsdk://oauth2redirect/de", //mymacsdk
+        redirectUri: "http://127.0.0.1:8080/oauth-callback",
       },
       driveds: {
         brand: "driveds.com",
@@ -69,7 +69,7 @@ class Psa extends utils.Adapter {
         siteCode: "DS_DE_ESP",
         shortBrand: "DS",
         url: "mw-ds-rp.mym.awsmpsa.com",
-        redirectUri: "mymdssdk://oauth2redirect/de",
+        redirectUri: "http://127.0.0.1:8080/oauth-callback",
       },
       opel: {
         brand: "opel.com",
@@ -79,7 +79,7 @@ class Psa extends utils.Adapter {
         siteCode: "OP_DE_ESP",
         shortBrand: "OP",
         url: "mw-op-rp.mym.awsmpsa.com",
-        redirectUri: "mymop://oauth2redirect/de",
+        redirectUri: "http://127.0.0.1:8080/oauth-callback",
       },
     };
   }
