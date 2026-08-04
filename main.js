@@ -28,6 +28,11 @@ class Psa extends utils.Adapter {
     this.on("ready", this.onReady.bind(this));
     this.on("unload", this.onUnload.bind(this));
 
+    // --- FIX: Setze Standardwert für this.config.type, falls nicht gesetzt oder ungültig ---
+    if (!this.config.type || typeof this.config.type !== "string" || !this.config.type.length) {
+      this.config.type = "peugeot";
+    }
+
     this.requestClient = axios.create({
       withCredentials: true,
       timeout: 3 * 60 * 1000, //3min client timeout
