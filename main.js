@@ -203,7 +203,7 @@ class Psa extends utils.Adapter {
         `client_id=${this.brands[this.config.type].clientId}&` +
         `code_challenge_method=S256&` +
         `code_challenge=${codeChallenge}&` +
-        `redirect_uri=http%3A%2F%2F127.0.0.1%3A8080%2Foauth-callback&` +
+        `redirect_uri=${encodeURIComponent(this.brands[this.config.type].redirectUri)}&` +
         `siteCode=${this.brands[this.config.type].siteCode}&` +
         `scope=openid+profile+email&` +
         `state=${state}`;
@@ -298,16 +298,18 @@ async onReady() {
 
   // If no valid session, try to authenticate
   if (!this.session.access_token) {
-    if (this.config.user && this.config.password) {
-      this.log.info("No valid session. Try to login with credentials");
-      const loginSuccess = await this.loginWithCredentials();
-      if (!loginSuccess && this.config.auth_code) {
-        this.log.info("Credentials login failed. Try with auth code");
-        await this.loginAuthCode(this.config.auth_code);
-      }
-    } else if (this.config.auth_code) {
+    // Try auth code first if available
+    if (this.config.auth_code) {
       this.log.info("Found auth code. Try to login");
       await this.loginAuthCode(this.config.auth_code);
+      // If auth code login failed and credentials are available, try credentials
+      if (!this.session.access_token && this.config.user && this.config.password) {
+        this.log.info("Auth code login failed. Try with credentials");
+        await this.loginWithCredentials();
+      }
+    } else if (this.config.user && this.config.password) {
+      this.log.info("No auth code found. Try to login with credentials");
+      await this.loginWithCredentials();
     } else {
       this.log.warn("Please enter username/password or authorization code in settings");
       return;

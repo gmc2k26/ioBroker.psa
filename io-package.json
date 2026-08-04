@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.22",
+    "version": "0.0.23",
     "news": {
+      "0.0.23": {
+        "en": "add user/password fields to admin UI, fix redirect_uri mismatch, prioritize auth code login",
+        "de": "Füge Benutzername/Passwort-Felder zur Admin-Oberfläche hinzu, behebe redirect_uri-Fehler, priorisiere Auth-Code-Login"
+      },
       "0.0.22": {
         "en": "fix admin UI: set default brand to 'peugeot' in index_m.html and load function",
         "de": "Fix für Admin-Oberfläche: Standard-Hersteller 'Peugeot' in index_m.html und load-Funktion gesetzt"
