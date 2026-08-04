@@ -58,6 +58,10 @@
             // do not call onChange direct, because onChange could expect some arguments
 
             if (id === 'type') {
+              // Set default value to 'peugeot' if not defined or invalid
+              if (!settings[id] || typeof settings[id] !== 'string') {
+                settings[id] = 'peugeot';
+              }
               updateLoginLink(settings[id]);
 
               $('#type').on('change', function () {
@@ -169,7 +173,7 @@
       <div class="row">
         <div class="col s2 input-field">
           <select id="type" class="value">
-            <option value="peugeot">Peugeot</option>
+            <option value="peugeot" selected>Peugeot</option>
             <option value="citroen">Citroen</option>
             <option value="driveds">DS</option>
             <option value="opel">Opel</option>

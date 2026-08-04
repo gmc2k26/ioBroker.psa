@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.21",
+    "version": "0.0.22",
     "news": {
+      "0.0.22": {
+        "en": "fix admin UI: set default brand to 'peugeot' in index_m.html and load function",
+        "de": "Fix für Admin-Oberfläche: Standard-Hersteller 'Peugeot' in index_m.html und load-Funktion gesetzt"
+      },
       "0.0.21": {
         "en": "force default type to 'peugeot' in constructor to avoid [object Object] error for non-npm installs",
         "de": "Erzwinge Standard-Hersteller 'peugeot' im Konstruktor, um [object Object]-Fehler bei non-npm-Installationen zu vermeiden"
