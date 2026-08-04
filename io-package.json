@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.24",
+    "version": "0.0.25",
     "news": {
+      "0.0.25": {
+        "en": "fix OAuth callback: server now listens on 0.0.0.0 and uses ioBroker server IP for redirect_uri",
+        "de": "Fix für OAuth-Callback: Server hört jetzt auf 0.0.0.0 und verwendet die ioBroker-Server-IP für redirect_uri"
+      },
       "0.0.24": {
         "en": "fix [object Object] in username field, set redirect_uri to http://127.0.0.1:8080/oauth-callback for all brands",
         "de": "Fix für [object Object] im Benutzernamen-Feld, setze redirect_uri auf http://127.0.0.1:8080/oauth-callback für alle Hersteller"

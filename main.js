@@ -130,11 +130,14 @@ class Psa extends utils.Adapter {
         reject(err);
       });
 
-      // Try to listen on port 8080
-      this.oauthServer.listen(8080, "127.0.0.1", () => {
+      // Get the ioBroker server IP (not 127.0.0.1) to allow external access
+      const serverIp = this.getServerIp();
+
+      // Try to listen on port 8080 on all interfaces (0.0.0.0)
+      this.oauthServer.listen(8080, "0.0.0.0", () => {
         const address = this.oauthServer.address();
         this.log.info(
-          `OAuth callback server running on http://127.0.0.1:${address.port}/oauth-callback`
+          `OAuth callback server running on http://${serverIp}:${address.port}/oauth-callback`
         );
         // Timeout after 10 minutes
         setTimeout(() => {
@@ -146,6 +149,21 @@ class Psa extends utils.Adapter {
         }, 10 * 60 * 1000);
       });
     });
+  }
+
+  // Helper function to get the ioBroker server IP
+  getServerIp() {
+    // Try to get the first non-internal IP address
+    const interfaces = require('os').networkInterfaces();
+    for (const iface of Object.values(interfaces)) {
+      for (const details of iface) {
+        if (details.internal === false && details.family === 'IPv4') {
+          return details.address;
+        }
+      }
+    }
+    // Fallback to 127.0.0.1 if no external IP found
+    return '127.0.0.1';
   }
 
   // Login with username and password (automatic OAuth2 flow)
@@ -196,14 +214,16 @@ class Psa extends utils.Adapter {
       const codeChallenge = this.generateCodeChallenge();
       const state = this.generateRandomState();
 
-      // Step 3: Build OAuth2 URL
+      // Step 3: Build OAuth2 URL with dynamic redirect_uri
+      const serverIp = this.getServerIp();
+      const redirectUri = `http://${serverIp}:8080/oauth-callback`;
       const oauthUrl = `https://idpcvs.${this.brands[this.config.type].brand}/am/oauth2/authorize?` +
         `locale=de-DE&` +
         `response_type=code&` +
         `client_id=${this.brands[this.config.type].clientId}&` +
         `code_challenge_method=S256&` +
         `code_challenge=${codeChallenge}&` +
-        `redirect_uri=${encodeURIComponent(this.brands[this.config.type].redirectUri)}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `siteCode=${this.brands[this.config.type].siteCode}&` +
         `scope=openid+profile+email&` +
         `state=${state}`;
