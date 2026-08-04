@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "psa",
-    "version": "0.0.19",
+    "version": "0.0.20",
     "news": {
+      "0.0.20": {
+        "en": "fix type field visibility in admin UI by replacing 'def' with 'default'",
+        "de": "Fix für Herstellerauswahl: Feld in Admin-Oberfläche sichtbar durch Ersatz von 'def' mit 'default'"
+      },
       "0.0.19": {
         "en": "fix type configuration validation to ensure it is a string and not an object",
         "de": "Fix für Typ-Konfiguration: Sicherstellen, dass der Fahrzeugtyp als String (nicht als Objekt) gespeichert ist"
